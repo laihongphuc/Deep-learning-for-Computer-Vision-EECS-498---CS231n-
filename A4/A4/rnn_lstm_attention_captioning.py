@@ -631,7 +631,8 @@ class CaptioningRNN(nn.Module):
           #hidden_state_start = self.linear1(feature_extract)
           input_vector = self.word_embedding(start_word.long()).squeeze()
           prev_h = feature_extract.mean(dim=(2,3))
-          attn,_ = dot_product_attention(prev_h, feature_extract)
+          attn,attn_weight = dot_product_attention(prev_h, feature_extract)
+          attn_weights_all[:,0,:] = attn_weight
           prev_c = prev_h.clone()
           output_hidden, prev_c = self.net.step_forward(input_vector, prev_h, prev_c, attn)
           scores = self.linear2(output_hidden)
@@ -639,7 +640,8 @@ class CaptioningRNN(nn.Module):
           captions[:,0] = next_word.reshape(-1)
           for i in range(1, max_length):
             input_vector = self.word_embedding(next_word.reshape(-1))
-            attn,_ = dot_product_attention(output_hidden, feature_extract)
+            attn,attn_weight = dot_product_attention(output_hidden, feature_extract)
+            attn_weights_all[:,i,:] = attn_weight
             output_hidden, prev_c = self.net.step_forward(input_vector, output_hidden, prev_c, attn)
             scores = self.linear2(output_hidden)
             next_word = torch.argmax(scores, dim=1)
