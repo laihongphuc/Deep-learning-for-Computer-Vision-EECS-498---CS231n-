@@ -64,7 +64,10 @@ def three_layer_convnet(x, params):
   # Hint: F.linear, F.conv2d, F.relu, flatten (implemented above)                                   
   ##############################################################################
   # Replace "pass" statement with your code
-  pass
+  x = F.relu(F.conv2d(x, conv_w1, conv_b1, padding = 2))
+  x = F.relu(F.conv2d(x, conv_w2, conv_b2, padding = 1))
+  x = flatten(x)
+  scores = F.linear(x, fc_w, fc_b)
   ##############################################################################
   #                                 END OF YOUR CODE                             
   ##############################################################################
@@ -91,13 +94,21 @@ def initialize_three_layer_conv_part2(dtype=torch.float, device='cpu'):
   kernel_size_2 = 3
 
   # Initialize the weights
-  conv_w1 = None
-  conv_b1 = None
-  conv_w2 = None
-  conv_b2 = None
-  fc_w = None
-  fc_b = None
-
+  conv_w1 = nn.init.kaiming_normal_(torch.empty(channel_1, C, kernel_size_1, kernel_size_1, 
+                                    dtype=dtype, device=device))
+  conv_b1 = nn.init.zeros_(torch.empty(channel_1, dtype=dtype, device=device))
+  conv_w2 = nn.init.kaiming_normal_(torch.empty(channel_2, channel_1, kernel_size_2, kernel_size_2,
+                                    dtype=dtype, device = device))
+  conv_b2 = nn.init.zeros_(torch.empty(channel_2, dtype=dtype, device=device))
+  fc_w = nn.init.kaiming_normal_(torch.empty(num_classes, channel_2*H*W,  
+                                  dtype=dtype, device=device))
+  fc_b = nn.init.zeros_(torch.empty(num_classes))
+  conv_w1.requires_grad = True
+  conv_b1.requires_grad = True
+  conv_w2.requires_grad = True
+  conv_b2.requires_grad = True
+  fc_w.requires_grad = True
+  fc_b.requires_grad = True
   ##############################################################################
   # TODO: Define and initialize the parameters of a three-layer ConvNet           
   # using nn.init.kaiming_normal_. You should initialize your bias vectors    
@@ -140,7 +151,18 @@ class ThreeLayerConvNet(nn.Module):
     # HINT: nn.Conv2d, nn.init.kaiming_normal_, nn.init.zeros_            
     ############################################################################
     # Replace "pass" statement with your code
-    pass
+    self.conv1 = nn.Conv2d(in_channel, channel_1, kernel_size = 5, padding = 2)
+    self.conv2 = nn.Conv2d(channel_1, channel_2, kernel_size = 3, padding = 1)
+    self.fc = nn.Linear(channel_2*32*32, num_classes)
+    self.relu = nn.ReLU(inplace=True)
+    
+    nn.init.kaiming_normal_(self.conv1.weight)
+    nn.init.zeros_(self.conv1.bias)
+    nn.init.kaiming_normal_(self.conv2.weight)
+    nn.init.zeros_(self.conv2.bias)
+    nn.init.kaiming_normal_(self.fc.weight)
+    nn.init.zeros_(self.fc.bias)
+    
     ############################################################################
     #                           END OF YOUR CODE                            
     ############################################################################
@@ -154,7 +176,10 @@ class ThreeLayerConvNet(nn.Module):
     # Hint: flatten (implemented at the start of part II)                          
     ############################################################################
     # Replace "pass" statement with your code
-    pass
+    x = self.relu(self.conv1(x))
+    x = self.relu(self.conv2(x))
+    x = flatten(x)
+    scores = self.fc(x)
     ############################################################################
     #                            END OF YOUR CODE                          
     ############################################################################
@@ -186,7 +211,8 @@ def initialize_three_layer_conv_part3():
   # momentum, with L2 weight decay of 1e-4.                    
   ##############################################################################
   # Replace "pass" statement with your code
-  pass
+  model = ThreeLayerConvNet(C, channel_1, channel_2, num_classes)
+  optimizer = optim.SGD(model.parameters(), lr = learning_rate, weight_decay = weight_decay)
   ##############################################################################
   #                                 END OF YOUR CODE                            
   ##############################################################################
@@ -244,7 +270,18 @@ def initialize_three_layer_conv_part4():
   # Hint: nn.Sequential, Flatten (implemented at the start of Part IV)   
   ####################################################################################
   # Replace "pass" statement with your code
-  pass
+  model = nn.Sequential(OrderedDict([
+    ('conv1', nn.Conv2d(C, channel_1, kernel_size_1, padding = pad_size_1)),
+    ('relu', nn.ReLU(inplace=True)),
+    ('conv2', nn.Conv2d(channel_1, channel_2, kernel_size_2, padding = pad_size_2)),
+    ('flat', Flatten()),
+    ('fc1', nn.Linear(H*W*channel_2, num_classes)),
+  ]))
+
+  optimizer = optim.SGD(model.parameters(), lr = learning_rate,
+                        weight_decay = weight_decay,
+                        momentum=momentum, nesterov=True)
+
   ################################################################################
   #                                 END OF YOUR CODE                             
   ################################################################################
@@ -271,7 +308,18 @@ class PlainBlock(nn.Module):
     # Store the result in self.net.                                            
     ############################################################################
     # Replace "pass" statement with your code
-    pass
+    if downsample :
+      stride = 2
+    else :
+      stride = 1
+    self.net = nn.Sequential(
+      nn.BatchNorm2d(Cin),
+      nn.ReLU(inplace=True),
+      nn.Conv2d(Cin, Cout, padding=1, kernel_size=3, stride=stride),
+      nn.BatchNorm2d(Cout),
+      nn.ReLU(inplace=True),
+      nn.Conv2d(Cout, Cout, padding=1, kernel_size=3)
+    )
     ############################################################################
     #                                 END OF YOUR CODE                         #
     ############################################################################
@@ -295,7 +343,12 @@ class ResidualBlock(nn.Module):
     # Store the main block in self.block and the shortcut in self.shortcut.    #
     ############################################################################
     # Replace "pass" statement with your code
-    pass
+    if downsample :
+      stride = 2
+    else :
+      stride = 1
+    self.block = PlainBlock(Cin,Cout,downsample)
+    self.shortcut = nn.Conv2d(Cin, Cout, kernel_size=1, stride=stride)
     ############################################################################
     #                                 END OF YOUR CODE                         #
     ############################################################################
@@ -315,7 +368,14 @@ class ResNet(nn.Module):
     # Store the model in self.cnn.                                             #
     ############################################################################
     # Replace "pass" statement with your code
-    pass
+    self.stem = ResNetStem(Cin, stage_args[0][0])
+    self.args = stage_args
+    layer = []
+    layer.append(self.stem)
+    for i in range(len(stage_args)):
+      layer.append(ResNetStage(*stage_args[i], block))
+    self.cnn = nn.Sequential(*layer)
+    self.flat = Flatten()
     ############################################################################
     #                                 END OF YOUR CODE                         #
     ############################################################################
@@ -328,7 +388,12 @@ class ResNet(nn.Module):
     # Store the output in `scores`.                                            #
     ############################################################################
     # Replace "pass" statement with your code
-    pass
+    x = self.cnn(x)
+    pool = nn.AvgPool2d((x.shape[2], x.shape[3]))
+    if self.flat(x).shape[1] != self.args[-1][1] :
+      x = pool(x)
+    x = self.flat(x)
+    scores = self.fc(x)
     ############################################################################
     #                                 END OF YOUR CODE                         #
     ############################################################################

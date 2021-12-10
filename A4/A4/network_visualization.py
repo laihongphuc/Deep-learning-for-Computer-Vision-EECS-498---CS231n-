@@ -47,7 +47,13 @@ def compute_saliency_maps(X, y, model):
   # Hint: X.grad.data stores the gradients                                     #
   ##############################################################################
   # Replace "pass" statement with your code
-  pass
+  # Forward 
+  scores = model(X)
+  loss = scores[range(y.shape[0]),y].sum()
+  loss.backward()
+  grads = X.grad.data   # shape (N, 3, H, W)
+  grads = torch.abs(grads)
+  saliency,_ = torch.max(grads, dim=1) 
   ##############################################################################
   #               END OF YOUR CODE                                             #
   ##############################################################################
@@ -88,7 +94,17 @@ def make_adversarial_attack(X, target_y, model, max_iter=100, verbose=True):
   # You can print your progress over iterations to check your algorithm.       #
   ##############################################################################
   # Replace "pass" statement with your code
-  pass
+  for _ in range(max_iter):
+    X_adv.grad = None
+    prediction = model(X_adv)
+    pred_label = torch.argmax(prediction, dim = 1).item()
+    if target_y == pred_label :
+      break
+    loss = prediction[0,target_y]
+    loss.backward()
+    grads = X_adv.grad.data.detach()
+    with torch.no_grad():
+      X_adv += learning_rate * grads / (torch.sqrt((grads**2).sum())) 
   ##############################################################################
   #                             END OF YOUR CODE                               #
   ##############################################################################
@@ -123,7 +139,13 @@ def class_visualization_step(img, target_y, model, **kwargs):
     # after each step.                                                     #
     ########################################################################
     # Replace "pass" statement with your code
-    pass
+    prediction = model(img)
+    loss = prediction[0, target_y] - l2_reg * torch.sqrt(torch.sum(img**2))
+    loss.backward()
+    grads = img.grad.data
+    #print(grads.shape)
+    img.data += learning_rate * grads / (torch.sqrt((grads**2).sum())) 
+    img.grad = None
     ########################################################################
     #                             END OF YOUR CODE                         #
     ########################################################################
